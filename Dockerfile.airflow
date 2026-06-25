@@ -1,0 +1,22 @@
+FROM apache/airflow:slim-2.10.4-python3.11
+
+USER root
+
+# PySpark needs a JVM. Symlink to a stable path so JAVA_HOME doesn't have to
+# hardcode an architecture-specific directory name (arm64 vs amd64 differ).
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends openjdk-17-jdk-headless \
+    && ln -sfn "$(dirname "$(dirname "$(readlink -f /usr/bin/javac)")")" /usr/lib/jvm/default-java \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV JAVA_HOME=/usr/lib/jvm/default-java
+ENV MEDALLION_NYC_DATA_DIR=/opt/airflow/data
+
+USER airflow
+
+COPY pyproject.toml README.md /opt/medallion-nyc/
+COPY src /opt/medallion-nyc/src
+# The "slim" Airflow image excludes most provider packages, including the
+# Postgres driver -- needed for the metadata DB connection, not for our DAGs.
+RUN pip install --no-cache-dir /opt/medallion-nyc psycopg2-binary
